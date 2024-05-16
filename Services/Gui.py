@@ -15,23 +15,31 @@ class Gui:
             move = Move(check_var.get())
             move.upper(source.get())
             self.notice.configure(text='UPPER FILES', fg='red')
+        else:
+            self.notice.configure(text='FAILED', fg='red')
 
     def no_dir(self, source, check_var):
         if source.get() != "":
             move = Move(check_var.get())
             move.no_directories(source.get())
             self.notice.configure(text='PULL ALL FILES', fg='red')
+        else:
+            self.notice.configure(text='FAILED', fg='red')
 
     def delete_new_site(self, source):
         if source.get() != "":
             Delete.new_site_pattern(source.get())
             self.notice.configure(text='Delete new site', fg='red')
+        else:
+            self.notice.configure(text='FAILED', fg='red')
 
     def move(self, source, destination, check_var):
         if source.get() != "" and destination.get() != "" and source.get() != destination.get():
             move = Move(check_var.get())
             move.mv(source.get(), destination.get())
             self.notice.configure(text='All files moved', fg='red')
+        else:
+            self.notice.configure(text='FAILED', fg='red')
 
     def similar_move(self, source, destination, check_var):
         if source.get() != "" and destination.get() != "" and source.get() != destination.get():
@@ -39,11 +47,25 @@ class Gui:
             move = Move(check_var.get())
             move.similar_mv("\\".join(path.split("\\")[:-1]), destination.get(), path.split("\\")[-1])
             self.notice.configure(text='Similar files moved', fg='red')
+        else:
+            self.notice.configure(text='FAILED', fg='red')
 
     def delete_empty_space(self, source):
         if source.get() != "":
             Delete.empty(source.get())
             self.notice.configure(text='DEL Empty Dir', fg='red')
+        else:
+            self.notice.configure(text='FAILED', fg='red')
+
+    def delete_similar(self, source):
+        if source.get() != "":
+            path = source.get()
+            delete = Delete()
+            delete.similar("\\".join(path.split("\\")[:-1]), path.split("\\")[-1])
+            self.notice.configure(text='Similar files delete', fg='red')
+        else:
+            self.notice.configure(text='FAILED', fg='red')
+
 
     def update_list(self, event, entry, entry_var=None, tree=None, list_frame=None):
         path = entry_var.get()
@@ -65,7 +87,7 @@ class Gui:
             # List directories in the current path
             for name in os.listdir(dir_path):
                 full_path = os.path.join(dir_path, name)
-                if os.path.isdir(full_path) and full_path.startswith(path):
+                if full_path.startswith(path):
                     tree.insert('', 'end', text=full_path)
 
     def on_tree_select(self, event, list_frame, entry_var):
@@ -76,8 +98,7 @@ class Gui:
             entry_var.set(item_text)
             list_frame.pack_forget()
 
-
-    def on_tree_select_key(self, event, entry_var, entry_widget):
+    def on_tree_select_key(self, event, entry_var, entry_widget, list_frame):
         tree = event.widget
         selected_item = tree.selection()
         if selected_item:
@@ -86,9 +107,28 @@ class Gui:
             # Move cursor to the end
             entry_widget.icursor(tkinter.END)
 
+    def tab_key_pressed(self, event, frame, entry, list):
+        path = entry.get()
+        similar_files = [f for f in os.listdir(os.path.dirname(path)) if f.startswith(entry.get())]
+
+        if similar_files:
+            # 첫 번째 유사한 파일을 찾아서 entry에 선택
+            first_similar_file = similar_files[0]
+            entry.delete(0, tkinter.END)
+            entry.insert(0, first_similar_file)
+            entry.selection_range(len(path), tkinter.END)
+            list.focus_set()  # Treeview에 포커스 설정
+        else:
+            first_item = list.focus()
+            if not first_item:
+                first_item = list.get_children()[0]
+        list.selection_set(first_item)
+        frame.after(10, lambda: entry.focus())
+        frame.after(20, lambda: entry.icursor(tkinter.END))
+
     def create(self):
         window = tkinter.Tk()
-        window.title("파일 다루기")
+        window.title("앤디파일")
         window.geometry("600x300")
         window.resizable(False, False)
         src_path = tkinter.Frame(window)
@@ -104,6 +144,7 @@ class Gui:
         source = tkinter.ttk.Entry(src_path, textvariable=source_var)
         source.pack(fill='x', expand=True)
         source.bind('<KeyRelease>', lambda event: self.update_list(event, source, source_var, source_list, source_list_frame))
+        source.bind("<Tab>", lambda event: self.tab_key_pressed(event, src_path, source, source_list))
 
         source_list_frame = tkinter.ttk.Frame(src_path)
         source_list_frame.pack(expand=True, fill=tkinter.BOTH)
@@ -118,20 +159,23 @@ class Gui:
 
         # Bind the selection event of the Treeview for Entry 1
         source_list.bind('<<TreeviewSelect>>', lambda event: self.on_tree_select(event, source_list_frame, source_var))
-        source_list.bind('<Return>', lambda event: self.on_tree_select_key(event, source_var, source))
+        source_list.bind('<Return>', lambda event: self.on_tree_select_key(event, source_var, source, source_list_frame))
 
         check_var = tkinter.IntVar()
         check1 = tkinter.Checkbutton(src_path, text="파일 이름 강제 변경", variable=check_var)
         check1.pack(fill="x", expand=True)
 
-        nodir_button = tkinter.Button(src_path, text="상위 디렉터리 이동", command=lambda: self.upper(source, check_var))
-        nodir_button.pack(side="left", expand=True, pady=10)
+        upperdir_button = tkinter.Button(src_path, text="상위 디렉터리 이동", command=lambda: self.upper(source, check_var))
+        upperdir_button.pack(side="left", expand=True, pady=10)
 
         nodir_button = tkinter.Button(src_path, text="모든 디렉터리 삭제", command=lambda: self.no_dir(source, check_var))
         nodir_button.pack(side="left", expand=True, pady=10)
 
-        newsite_button = tkinter.Button(src_path, text="빈 디렉터리 삭제", command=lambda: self.delete_empty_space(source))
-        newsite_button.pack(side="left", expand=True, pady=10)
+        empty_button = tkinter.Button(src_path, text="빈 디렉터리 삭제", command=lambda: self.delete_empty_space(source))
+        empty_button.pack(side="left", expand=True, pady=10)
+
+        del_similar_button = tkinter.Button(src_path, text="비슷한 파일 전부 삭제", command=lambda: self.delete_similar(source))
+        del_similar_button.pack(side="left", expand=True, pady=10)
 
         dest_path_label = tkinter.Label(dest_path, text="Destination Path :")
         dest_path_label.pack(fill='x', expand=True)

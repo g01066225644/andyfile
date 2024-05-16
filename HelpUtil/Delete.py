@@ -22,6 +22,14 @@ class Delete:
         # Remove the directory itself
         os.rmdir(path)
 
+    def similar(self, src, name):
+        self.new_site_pattern(src)
+        for file in os.listdir(src):
+            if fnmatch.fnmatch(file, f'*{name}*'):
+                # Construct the file path
+                source_path = os.path.join(src, file)
+                os.remove(source_path)
+
     @classmethod
     def empty(cls, path):
         for root, dirs, files in os.walk(path, topdown=False):
