@@ -66,10 +66,16 @@ class Gui:
         else:
             self.notice.configure(text='FAILED', fg='red')
 
+    def update_list(self, event, entry, entry_var, tree, list_frame):
 
-    def update_list(self, event, entry, entry_var=None, tree=None, list_frame=None):
+        if event.keysym == 'Return':
+            self.enter_key(event, entry, list_frame)
+            return
+        elif event.keysym in ["Up", "Down"]:
+            self.select_UD(event, entry, entry_var, tree, list_frame)
+            return
+
         path = entry_var.get()
-
         # Show the Treeview and scrollbar if there is text in the entry
         if path:
             list_frame.pack(after=entry, fill=tkinter.BOTH, expand=True)
@@ -90,41 +96,61 @@ class Gui:
                 if full_path.startswith(path):
                     tree.insert('', 'end', text=full_path)
 
-    def on_tree_select(self, event, list_frame, entry_var):
+    def on_tree_select(self, event, list_frame, entry_widget, entry_var):
         tree = event.widget
         selected_item = tree.selection()
         if selected_item:
             item_text = tree.item(selected_item[0], 'text')
             entry_var.set(item_text)
             list_frame.pack_forget()
+        event.widget.after(10, lambda: entry_widget.focus())
+        event.widget.after(20, lambda: entry_widget.icursor(tkinter.END))
 
-    def on_tree_select_key(self, event, entry_var, entry_widget, list_frame):
-        tree = event.widget
-        selected_item = tree.selection()
-        if selected_item:
-            item_text = tree.item(selected_item[0], 'text')
-            entry_var.set(item_text)
-            # Move cursor to the end
-            entry_widget.icursor(tkinter.END)
+    def find_similar_files(self, entry_path):
+        similar_files = set()
+        directory = os.path.dirname(entry_path)
+        prefix = os.path.basename(entry_path)
+        files_in_directory = [f for f in os.listdir(directory) if f.startswith(prefix)]
+        similar_files.update(os.path.join(directory, f) for f in files_in_directory)
+        return similar_files
 
-    def tab_key_pressed(self, event, frame, entry, list):
-        path = entry.get()
-        similar_files = [f for f in os.listdir(os.path.dirname(path)) if f.startswith(entry.get())]
+    def find_common_prefix(self, similar_files):
+        return os.path.commonprefix(list(similar_files)) or None
+
+    def update_entry_and_tree(self, entry_widget, text):
+        entry_widget.delete(0, tkinter.END)
+        entry_widget.insert(0, text)
+        entry_widget.selection_range(len(text), tkinter.END)
+
+    def tab_key(self, event, entry_widget, tree_widget):
+        entry_path = entry_widget.get()
+        if entry_path == "":
+            return
+        similar_files = self.find_similar_files(entry_path)
 
         if similar_files:
-            # 첫 번째 유사한 파일을 찾아서 entry에 선택
-            first_similar_file = similar_files[0]
-            entry.delete(0, tkinter.END)
-            entry.insert(0, first_similar_file)
-            entry.selection_range(len(path), tkinter.END)
-            list.focus_set()  # Treeview에 포커스 설정
-        else:
-            first_item = list.focus()
-            if not first_item:
-                first_item = list.get_children()[0]
-        list.selection_set(first_item)
-        frame.after(10, lambda: entry.focus())
-        frame.after(20, lambda: entry.icursor(tkinter.END))
+            if len(similar_files) == 1:
+                selected_file = similar_files.pop()
+                self.update_entry_and_tree(entry_widget, selected_file)
+            common_prefix = self.find_common_prefix(similar_files)
+            if common_prefix:
+                self.update_entry_and_tree(entry_widget, common_prefix)
+
+        event.widget.after(10, lambda: entry_widget.focus())
+        event.widget.after(20, lambda: entry_widget.icursor(tkinter.END))
+        return "break"
+
+    def select_UD(self, event, entry, entry_var, tree, list_frame):
+        #수정 더 필요
+        first_item = tree.get_children()[0]
+        tree.selection_set(first_item)
+        tree.focus(first_item)
+
+    def enter_key(self, event, entry_widget, tree_widget):
+        tree_widget.pack_forget()
+        event.widget.after(10, lambda: entry_widget.focus())
+        event.widget.after(20, lambda: entry_widget.icursor(tkinter.END))
+        return "break"
 
     def create(self):
         window = tkinter.Tk()
@@ -143,8 +169,9 @@ class Gui:
         source_var = tkinter.StringVar()
         source = tkinter.ttk.Entry(src_path, textvariable=source_var)
         source.pack(fill='x', expand=True)
-        source.bind('<KeyRelease>', lambda event: self.update_list(event, source, source_var, source_list, source_list_frame))
-        source.bind("<Tab>", lambda event: self.tab_key_pressed(event, src_path, source, source_list))
+        source.bind('<KeyRelease>',
+                    lambda event: self.update_list(event, source, source_var, source_list, source_list_frame))
+        source.bind("<Tab>", lambda event: self.tab_key(event, source, source_list))
 
         source_list_frame = tkinter.ttk.Frame(src_path)
         source_list_frame.pack(expand=True, fill=tkinter.BOTH)
@@ -158,8 +185,8 @@ class Gui:
         source_list_frame.pack_forget()
 
         # Bind the selection event of the Treeview for Entry 1
-        source_list.bind('<<TreeviewSelect>>', lambda event: self.on_tree_select(event, source_list_frame, source_var))
-        source_list.bind('<Return>', lambda event: self.on_tree_select_key(event, source_var, source, source_list_frame))
+        source_list.bind('<<TreeviewSelect>>',
+                         lambda event: self.on_tree_select(event, source_list_frame, source, source_var))
 
         check_var = tkinter.IntVar()
         check1 = tkinter.Checkbutton(src_path, text="파일 이름 강제 변경", variable=check_var)
@@ -183,14 +210,18 @@ class Gui:
         destination_var = tkinter.StringVar()
         destination = tkinter.ttk.Entry(dest_path, textvariable=destination_var)
         destination.pack(fill='x', expand=True)
-        destination.bind('<KeyRelease>', lambda event: self.update_list(event, destination, destination_var, destination_list, destination_list_frame))
+        destination.bind('<KeyRelease>',
+                         lambda event: self.update_list(event, destination, destination_var, destination_list,
+                                                        destination_list_frame))
+        destination.bind("<Tab>", lambda event: self.tab_key(event, destination, destination_list))
 
         # Treeview and Scrollbar for Entry 2
         destination_list_frame = tkinter.ttk.Frame(dest_path)
         destination_list_frame.pack(expand=True, fill=tkinter.BOTH)
         destination_list = tkinter.ttk.Treeview(destination_list_frame)
         destination_list.pack(side=tkinter.LEFT, expand=True, fill=tkinter.BOTH)
-        destination_yscrollbar = tkinter.ttk.Scrollbar(destination_list_frame, orient="vertical", command=destination_list.yview)
+        destination_yscrollbar = tkinter.ttk.Scrollbar(destination_list_frame, orient="vertical",
+                                                       command=destination_list.yview)
         destination_yscrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
         destination_list.configure(yscrollcommand=destination_yscrollbar.set)
 
@@ -198,13 +229,16 @@ class Gui:
         destination_list_frame.pack_forget()
 
         # Bind the selection event of the Treeview for Entry 2
-        destination_list.bind('<<TreeviewSelect>>', lambda event: self.on_tree_select(event, destination_list_frame, destination_var))
-        destination_list.bind('<Return>', lambda event: self.on_tree_select_key(event, destination_var, destination))
+        destination_list.bind('<<TreeviewSelect>>',
+                              lambda event: self.on_tree_select(event, destination_list_frame, destination,
+                                                                destination_var))
 
-        move_button = tkinter.Button(dest_path, text="모든 파일 이동", command=lambda: self.move(source, destination, check_var))
+        move_button = tkinter.Button(dest_path, text="모든 파일 이동",
+                                     command=lambda: self.move(source, destination, check_var))
         move_button.pack(side="left", expand=True, pady=10)
 
-        move_button = tkinter.Button(dest_path, text="비슷한 파일 이동", command=lambda: self.similar_move(source, destination, check_var))
+        move_button = tkinter.Button(dest_path, text="비슷한 파일 이동",
+                                     command=lambda: self.similar_move(source, destination, check_var))
         move_button.pack(side="left", expand=True, pady=10)
 
         self.notice = tkinter.Label(window)
