@@ -73,7 +73,7 @@ class Move:
         for file in os.listdir(src):
             if fnmatch.fnmatch(file, f'*{name}*'):
                 if os.path.isdir(os.path.join(src, file)):
-                    self.mv(os.path.join(src, file), dest)
+                    shutil.move(str(os.path.join(src, file)), str(dest))
                 else:
                     # Construct the file path
                     source_path = os.path.join(src, file)
