@@ -44,10 +44,14 @@ class Move:
 
     def mv(self, src, dest):
         Delete.new_site_pattern(src)
-        if not os.path.exists(os.path.dirname(dest)):
+        if not os.path.exists(dest):
             # If it doesn't exist, create it
-            os.makedirs(os.path.dirname(dest))
+            os.makedirs(dest)
         for root, dirs, files in os.walk(src):
+            for directory in dirs:
+                source_path = os.path.join(root, directory)
+                destination_path = self.naming_process(src, dest, directory, self.change_name)
+                shutil.move(str(source_path), str(destination_path))
             # Exclude the current directory itself to prevent moving files to it
             for file in files:
                 # Get the source and destination paths
@@ -63,15 +67,18 @@ class Move:
 
     def similar_mv(self, src, dest, name):
         Delete.new_site_pattern(src)
-        if not os.path.exists(os.path.dirname(dest)):
+        if not os.path.exists(dest):
             # If it doesn't exist, create it
-            os.makedirs(os.path.dirname(dest))
+            os.makedirs(dest)
         for file in os.listdir(src):
             if fnmatch.fnmatch(file, f'*{name}*'):
-                # Construct the file path
-                source_path = os.path.join(src, file)
-                destination_path = self.naming_process(src, dest, file, self.change_name)
-                shutil.move(str(source_path), str(destination_path))
+                if os.path.isdir(os.path.join(src, file)):
+                    self.mv(os.path.join(src, file), dest)
+                else:
+                    # Construct the file path
+                    source_path = os.path.join(src, file)
+                    destination_path = self.naming_process(src, dest, file, self.change_name)
+                    shutil.move(str(source_path), str(destination_path))
 
     @staticmethod
     def naming_process(src: str, dst: str, file_name: str, change_name: bool = False):

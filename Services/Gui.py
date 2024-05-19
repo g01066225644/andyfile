@@ -1,7 +1,10 @@
 import os
 import tkinter
 import tkinter.ttk
+from functools import partial
 
+from HelpUtil.Extract import Extract
+from HelpUtil.Thread import Thread
 from HelpUtil.Move import Move
 from HelpUtil.Delete import Delete
 
@@ -38,6 +41,16 @@ class Gui:
             move = Move(check_var.get())
             move.mv(source.get(), destination.get())
             self.notice.configure(text='All files moved', fg='red')
+        else:
+            self.notice.configure(text='FAILED', fg='red')
+
+    def extract(self, source):
+        if source.get() != "":
+            for file_name in os.listdir(source.get()):
+                if file_name.endswith(('.zip', '.tar.gz', '.rar', '.egg')):
+                    ext = Extract()
+                    ext.extract(os.path.join(source.get(), file_name))
+            self.notice.configure(text='Extract done', fg='red')
         else:
             self.notice.configure(text='FAILED', fg='red')
 
@@ -192,17 +205,25 @@ class Gui:
         check1 = tkinter.Checkbutton(src_path, text="파일 이름 강제 변경", variable=check_var)
         check1.pack(fill="x", expand=True)
 
-        upperdir_button = tkinter.Button(src_path, text="상위 디렉터리 이동", command=lambda: self.upper(source, check_var))
+        upperdir_button = tkinter.Button(src_path, text="상위 디렉터리 이동",
+                                         command=partial(Thread.make_thread, self.upper, source, check_var))
         upperdir_button.pack(side="left", expand=True, pady=10)
 
-        nodir_button = tkinter.Button(src_path, text="모든 디렉터리 삭제", command=lambda: self.no_dir(source, check_var))
+        nodir_button = tkinter.Button(src_path, text="모든 디렉터리 삭제",
+                                      command=partial(Thread.make_thread, self.no_dir, source, check_var))
         nodir_button.pack(side="left", expand=True, pady=10)
 
-        empty_button = tkinter.Button(src_path, text="빈 디렉터리 삭제", command=lambda: self.delete_empty_space(source))
+        empty_button = tkinter.Button(src_path, text="빈 디렉터리 삭제",
+                                      command=partial(Thread.make_thread, self.delete_empty_space, source))
         empty_button.pack(side="left", expand=True, pady=10)
 
-        del_similar_button = tkinter.Button(src_path, text="비슷한 파일 전부 삭제", command=lambda: self.delete_similar(source))
+        del_similar_button = tkinter.Button(src_path, text="비슷한 파일 전부 삭제",
+                                            command=partial(Thread.make_thread, self.delete_similar, source))
         del_similar_button.pack(side="left", expand=True, pady=10)
+
+        extract_button = tkinter.Button(src_path, text="압축파일 해제",
+                                            command=partial(Thread.make_thread, self.extract, source))
+        extract_button.pack(side="left", expand=True, pady=10)
 
         dest_path_label = tkinter.Label(dest_path, text="Destination Path :")
         dest_path_label.pack(fill='x', expand=True)
@@ -234,12 +255,14 @@ class Gui:
                                                                 destination_var))
 
         move_button = tkinter.Button(dest_path, text="모든 파일 이동",
-                                     command=lambda: self.move(source, destination, check_var))
+                                     command=partial(Thread.make_thread, self.move, source, destination,
+                                                     check_var))
         move_button.pack(side="left", expand=True, pady=10)
 
-        move_button = tkinter.Button(dest_path, text="비슷한 파일 이동",
-                                     command=lambda: self.similar_move(source, destination, check_var))
-        move_button.pack(side="left", expand=True, pady=10)
+        similar_move_button = tkinter.Button(dest_path, text="비슷한 파일 이동",
+                                             command=partial(Thread.make_thread, self.similar_move, source, destination,
+                                                             check_var))
+        similar_move_button.pack(side="left", expand=True, pady=10)
 
         self.notice = tkinter.Label(window)
         self.notice.pack(side="bottom", expand=True, fill=tkinter.BOTH)
